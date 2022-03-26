@@ -1,0 +1,403 @@
+<html>
+  <head>
+    <title>ETP</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+    <style>
+      body{
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          -khtml-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+      }
+    </style>
+  </head>
+  <body oncontextmenu="return false">
+    <script type="text/javascript">
+      AFRAME.registerComponent("zoom-component", {
+        schema: {},
+        init: function () {
+          document.addEventListener("wheel", this.camzoom.bind(this));
+        },
+        camzoom: function (event) {
+          // small increments for smoother zooming
+          const delta = event.wheelDelta / 1200;
+          var zoom = this.el.getAttribute("camera").zoom;
+          var finalZoom = zoom + delta;
+          // limiting the zoom
+          if (finalZoom < 2.5) finalZoom = 2.5;
+          if (finalZoom > 6) finalZoom = 6;
+          this.el.setAttribute("camera", "zoom", finalZoom);
+        },
+      });
+    </script>
+
+    <script type="text/javascript">
+      AFRAME.registerComponent("button_enabled", {
+        schema: {
+          number: { type: "int", default: 1 },
+          enabled: { type: "boolean", default: "false" },
+          go: { type: "boolean", default: "true" },
+        },
+        init: function () {
+          document
+            .getElementById("button1")
+            .addEventListener("click", this.b1.bind(this));
+          document
+            .getElementById("button2")
+            .addEventListener("click", this.b2.bind(this));
+          document
+            .getElementById("button3")
+            .addEventListener("click", this.b3.bind(this));
+          document
+            .getElementById("button4")
+            .addEventListener("click", this.b4.bind(this));
+          document
+            .getElementById("buttons")
+            .addEventListener("mousedown", this.bd.bind(this));
+          document
+            .getElementById("control_button")
+            .addEventListener("mousedown", this.bd.bind(this));
+        },
+        b1: function () {
+          this.data.enabled = this.data.number == 1;
+          document
+            .getElementById("button1")
+            .blur();
+        },
+        b2: function () {
+          this.data.enabled = this.data.number == 2;
+                    document
+            .getElementById("button2")
+            .blur();
+        },
+        b3: function () {
+          this.data.enabled = this.data.number == 3;
+                    document
+            .getElementById("button3")
+            .blur();
+        },
+        b4: function () {
+          this.data.enabled = this.data.number == 4;
+                    document
+            .getElementById("button4")
+            .blur();
+        },
+        bd: function () {
+          this.data.go = false;
+        }
+      });
+    </script>
+
+    <script type="text/javascript">
+      AFRAME.registerComponent("drag-rotate-component", {
+        schema: { speed: { default: 1 } },
+        init: function () {
+          this.ifMouseDown = false;
+          this.x_cord = 0;
+          this.y_cord = 0;
+          this.vectx = new THREE.Vector3(1, 0, 0);
+          this.vecty = new THREE.Vector3(0, 1, 0);
+          this.vectz = new THREE.Vector3(0, 0, 1);
+
+          document.addEventListener(
+            "mousedown",
+            this.OnDocumentMouseDown.bind(this)
+          );
+          document.addEventListener(
+            "mouseup",
+            this.OnDocumentMouseUp.bind(this)
+          );
+          document.addEventListener(
+            "mousemove",
+            this.OnDocumentMouseMove.bind(this)
+          );
+        },
+        OnDocumentMouseDown: function (event) {
+          if(this.el.components.button_enabled.data.go) {
+            this.ifMouseDown = true;
+            this.x_cord = event.x;
+            this.y_cord = event.y;
+          }
+          else{
+            this.el.components.button_enabled.data.go = true;
+          }
+        },
+        OnDocumentMouseUp: function (event) {
+          if(event.buttons == 0){
+            this.ifMouseDown = false;
+          }
+        },
+        OnDocumentMouseMove: function (event) {
+          if (this.el.components.button_enabled.data.enabled) {
+            if (this.ifMouseDown) {
+              var temp_x = event.x - this.x_cord;
+              var temp_y = event.y - this.y_cord;
+              if(event.buttons == 2){
+                this.el.object3D.rotateOnWorldAxis(
+                  this.vectz, (-temp_x/200)
+                );
+              }
+              else{
+                this.el.object3D.rotateOnWorldAxis(
+                  this.vecty,
+                  (temp_x * this.data.speed) / 100
+                );
+                this.el.object3D.rotateOnWorldAxis(
+                  this.vectx,
+                  (temp_y * this.data.speed) / 100
+                );
+              }
+              this.x_cord = event.x;
+              this.y_cord = event.y;
+            }
+          }
+        },
+      });
+    </script>
+
+    <script type="text/javascript">
+      var CLAMP_VELOCITY = 0.00001;
+      var MAX_DELTA = 0.2;
+      var KEYS = [
+        'KeyW', 'KeyA', 'KeyS', 'KeyD',
+        'ArrowUp', 'ArrowLeft', 'ArrowRight', 'ArrowDown',
+        'ShiftLeft', 'ShiftRight'
+      ];
+      var shouldCaptureKeyEvent = AFRAME.utils.shouldCaptureKeyEvent;
+
+      AFRAME.components["wasd-controls"].Component.prototype.getMovementVector =
+        (function () {
+          var directionVector = new THREE.Vector3(0, 0, 0);
+
+          return function (delta) {
+            var velocity = this.velocity;
+            directionVector.copy(velocity);
+            directionVector.multiplyScalar(delta);
+            return directionVector;
+          };
+        })();
+
+      AFRAME.components["wasd-controls"].Component.prototype.updateVelocity = function (delta) {
+        var acceleration;
+        var adAxis;
+        var adSign;
+        var data = this.data;
+        var keys = this.keys;
+        var velocity = this.velocity;
+        var wsAxis;
+        var wsSign;
+
+        adAxis = data.adAxis;
+        wsAxis = data.wsAxis;
+
+        // If FPS too low, reset velocity.
+        if (delta > MAX_DELTA) {
+          velocity[adAxis] = 0;
+          velocity[wsAxis] = 0;
+          return;
+        }
+
+        // https://gamedev.stackexchange.com/questions/151383/frame-rate-independant-movement-with-acceleration
+        var scaledEasing = Math.pow(1 / this.easing, delta * 60);
+        // Velocity Easing.
+        if (velocity[adAxis] !== 0) {
+          velocity[adAxis] = velocity[adAxis] * scaledEasing;
+        }
+        if (velocity[wsAxis] !== 0) {
+          velocity[wsAxis] = velocity[wsAxis] * scaledEasing;
+        }
+
+        // Clamp velocity easing.
+        if (Math.abs(velocity[adAxis]) < CLAMP_VELOCITY) { velocity[adAxis] = 0; }
+        if (Math.abs(velocity[wsAxis]) < CLAMP_VELOCITY) { velocity[wsAxis] = 0; }
+
+        if (!data.enabled) { return; }
+
+        // Update velocity using keys pressed.
+        acceleration = data.acceleration;
+        if(this.el.components.button_enabled.data.enabled){
+          if (keys.ShiftLeft || keys.ShiftRight) {var mod_speed = 1/5;}
+          else {var mod_speed = 1;}
+          if (data.adEnabled) {
+            adSign = data.adInverted ? -1 : 1;
+            if (keys.KeyA || keys.ArrowLeft) { velocity[adAxis] -= adSign * acceleration * delta * mod_speed; }
+            if (keys.KeyD || keys.ArrowRight) { velocity[adAxis] += adSign * acceleration * delta * mod_speed; }
+          }
+          if (data.wsEnabled) {
+            wsSign = -1;
+            if (keys.KeyW || keys.ArrowUp) { velocity[wsAxis] -= wsSign * acceleration * delta * mod_speed; }
+            if (keys.KeyS || keys.ArrowDown) { velocity[wsAxis] += wsSign * acceleration * delta * mod_speed; }
+          }
+        }
+      };
+
+      AFRAME.components["wasd-controls"].Component.prototype.onKeyDown = function (event) {
+          var code;
+          if (!shouldCaptureKeyEvent(event)) { return; }
+          code = event.code;
+          if (KEYS.indexOf(code) !== -1) { this.keys[code] = true; }
+      };
+
+      AFRAME.components["wasd-controls"].Component.prototype.onKeyUp = function (event) {
+          var code;
+          code = event.code;
+          if(code == 'ShiftLeft' || code == 'ShiftRight'){
+            delete this.keys['ShiftLeft'];
+            delete this.keys['ShiftRight'];
+          }
+          else{delete this.keys[code];}
+      };
+
+    </script>
+
+
+<div style="
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        text-align: center;
+        margin-left: -250px;
+        width:500px;
+        z-index: 1;
+      "
+     class="btn-group" role="group" id ="buttons">
+
+  <input type="radio" class="btn-check" name="btnradio" id="button1" autocomplete="off" checked>
+  <label class="btn btn-outline-light" for="button1"> Spine</label>
+
+  <input type="radio" class="btn-check" name="btnradio" id="button2" autocomplete="off">
+  <label class="btn btn-outline-light" for="button2">Heart</label>
+
+  <input type="radio" class="btn-check" name="btnradio" id="button3" autocomplete="off">
+  <label class="btn btn-outline-light" for="button3">Heart</label>
+
+  <input type="radio" class="btn-check" name="btnradio" id="button4" autocomplete="off">
+  <label class="btn btn-outline-light" for="button4">Broken</label>
+
+</div>
+
+<div style = "
+    position: fixed;
+    bottom:15px;
+    z-index: 1;
+    left: 20px;
+"
+>
+  <p>
+  <button id="control_button" class="btn btn-primary shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#collapseExample" aria-expanded="false" aria-controls="collapseExample" onmouseleave="this.blur();" onclick="this.blur();">
+    Controls
+  </button>
+</p>
+<div class="collapse show" id="collapseExample">
+  <div class="container card card-body">
+        <div class="row">
+          <div class="col-sm-auto">
+            <b>WASD/Arrow-Keys</b><br>
+            Move &uarr; &darr; or &larr; &rarr;
+          </div>
+          <div class="col-sm-auto">
+            <b>Left-Click</b><br>
+            Rotate &uarr; &darr; or &larr; &rarr;
+          </div>
+          <div class="col-sm-auto">
+            <b>Right-Click</b><br>
+            Rotate &olarr; or &orarr;
+          </div>
+          <div class="col-sm-auto">
+            <b>Scroll</b><br>
+            Zoom
+          </div>
+        </div>
+  </div>
+</div>
+
+</div>
+
+    <a-scene vr-mode-ui="enabled: false">
+      <a-asset-item
+        id="spine"
+        src="spine3D.glb"
+        response-type="arraybuffer"
+        crossorigin="anonymous"
+      ></a-asset-item>
+      <a-entity
+        gltf-model="#spine"
+        scale="2.2 2.2 2.2"
+        rotation="0 -90 0"
+        position="-2.4 -0.4 -6"
+        wasd-controls="wsAxis:y; acceleration:5.5"
+        drag-rotate-component
+        button_enabled="number:1; enabled:'true'"
+      ></a-entity>
+
+      <a-asset-item
+        id="heart1"
+        src="heart3D-1.glb"
+        response-type="arraybuffer"
+        crossorigin="anonymous"
+      ></a-asset-item>
+      <a-entity
+        gltf-model="#heart1"
+        scale="1.8 1.8 1.8"
+        rotation="0 -90 0"
+        position="-0.185 -0.195 -4"
+        wasd-controls="wsAxis:y; acceleration:4.5"
+        drag-rotate-component
+        button_enabled="number:2"
+      ></a-entity>
+
+      <a-asset-item
+        id="heart2"
+        src="heart3D-2.glb"
+        response-type="arraybuffer"
+        crossorigin="anonymous"
+      ></a-asset-item>
+      <a-entity
+        gltf-model="#heart2"
+        scale="1.4 1.4 1.4"
+        rotation="0 -90 0"
+        position="0.11 -0.15 -2"
+        wasd-controls="wsAxis:y; acceleration:3.5"
+        drag-rotate-component
+        button_enabled="number:3"
+      ></a-entity>
+
+      <a-asset-item
+        id="broken"
+        src="broken3D.glb"
+        response-type="arraybuffer"
+        crossorigin="anonymous"
+      ></a-asset-item>
+      <a-entity
+        gltf-model="#broken"
+        scale="1 1 1"
+        rotation="0 -90 180"
+        position="1 0.02 0"
+        wasd-controls="wsAxis:y; acceleration:2.5"
+        drag-rotate-component
+        button_enabled="number:4"
+      ></a-entity>
+
+      <a-sky color="#600000"></a-sky>
+      <a-camera
+        id="cam"
+        camera="zoom: 4"
+        position="0 0 5"
+        zoom-component
+        wasd-controls-enabled="false"
+        look-controls="enabled:false"
+      >
+      </a-camera>
+      <a-entity light="type: ambient; color: #BBB"></a-entity>
+      <a-entity
+        light="type: directional; color: #FFCDCD; intensity: 1.5"
+        position="0 2 10"
+      ></a-entity>
+    </a-scene>
+  </body>
+</html>
